@@ -1,0 +1,42 @@
+* {
+	margin: 0;
+	padding: 0;
+}
+
+html, body, .wrapper {
+    height: 100%;
+}
+
+.content {
+	box-sizing: border-box;
+	min-height: 100%;
+	padding-bottom: 90px;
+	text-align: center;
+}
+
+.footer {
+	height: 80px;
+	margin-top: -80px;
+}
+
+/*Стиль для блока, в которой отображается форма для выбора валюты*/
+.form {
+	margin: 10px auto;
+	width: 50%;
+}
+
+/*Стиль для блока, в которой отображается таблица с курсом валют*/
+#result {
+	margin: 20px auto;
+	width: 80%;
+}
+
+/*Стиль для блока вывода текста на странице с информацией*/
+#about {
+	margin: 20px auto;
+	width: 70%;
+}
+
+#text {
+	text-align: justify;
+}

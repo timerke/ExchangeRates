@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+
+{% block title %}ExchangeRates{% endblock %}
+
+{% block navigation %}
+<ul class="navbar-nav mr-auto">
+    <li class="nav-item">
+        <a class="nav-link active" href="{{ url_for('index') }}">Главная</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('about') }}">Информация</a>
+    </li>
+</ul>
+{% endblock %}
+
+{% block content %}
+<div class="form">
+    <form>
+        <div class="form-group">
+            <label for="valuta_selection">Выберите валюты</label>
+            <select multiple class="form-control" id="valuta_selection">
+                {% if valutas %}
+                <option value="all">Все</option>
+                {% for valuta in valutas %}
+                <option value="{{ valuta.code }}">{{ valuta.name }}</option>
+                {% endfor %}
+                {% else %}
+                <option>Нет валют</option>
+                {% endif %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>Выберите период, для которого нужно показать курсы валют</label>
+            <div class="form-group row">
+                <label for="start_date" class="col-sm-2 col-form-label">Начало</label>
+                <div class="col-sm-4">
+                    <input type="date" class="form-control" id="start_date">
+                </div>
+                <label for="finish_date" class="col-sm-2 col-form-label">Конец</label>
+                <div class="col-sm-4">
+                    <input type="date" class="form-control" id="finish_date">
+                </div>
+            </div>
+        </div>
+        <button id="exchanges_btn" type="button" class="btn btn-primary">Показать курсы</button>
+    </form>
+</div>
+<div id="result"></div>
+{% endblock %}
+
+{% block script %}
+<script>
+    /**
+     * Функция проверяет, что введенных данных достаточно для получения курсов валют.
+     * @param valutas: список выбранных валют;
+     * @param period: начало и конец периода.
+     * @returns: true, если данных достаточно, иначе false. 
+     */
+    function check_data(valutas, period) {
+        if (valutas.length && (period[0] || period[1]))
+            return true;
+        return false;
+    }
+
+    /**
+     * Функция получает курсы валют за требуемый период.
+     */
+    async function get_exchanges() {
+        // Получаем выбранные валюты
+        let valutas = get_valutas();
+        // Получаем начало и конец периода, для которого нужно получить курсы
+        let period = get_period();
+        // Проверяем, что все нужные данные указаны
+        if (!check_data(valutas, period))
+            // Введенных данных недостаточно, чтобы получить курсы валют
+            return;
+        // Записываем куки с выбранными валютами и датами
+        write_cookie(valutas, 'valutas');
+        write_cookie(period, 'period');
+        // Отправляем запрос для получения курсов валют
+        let data = { data: valutas, period: period };
+        let response = await fetch("{{ url_for('get_exchanges') }}",
+            {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+        let result = await response.json();
+        if (response.status != 200) {
+            // Ошибка при обработке запроса
+            return;
+        }
+        // Запрос обработан и получен ответ
+        show_exchanges(result.exchanges);
+    }
+
+    /**
+     * Функция получает начало и конец периода.
+     * @returns: список из дат начала и конца периода.
+     */
+    function get_period() {
+        let start_date = document.getElementById('start_date').value;
+        let finish_date = document.getElementById('finish_date').value;
+        if (start_date > finish_date) {
+            let swap = finish_date;
+            finish_date = start_date;
+            start_date = swap;
+        }
+        return [start_date, finish_date];
+    }
+
+    /**
+     * Функция получает выбранные из списка валюты.
+     * @returns: список кодов выбранных валют.
+     */
+    function get_valutas() {
+        // Элемент множественного выбора
+        let valuta_selection = document.getElementById('valuta_selection');
+        let len = valuta_selection.options.length;
+        let selected_valutas = [];
+        for (let i = 0; i < len; i++) {
+            if (valuta_selection.options[i].selected == true) {
+                selected_valutas.push(valuta_selection.options[i].value);
+                if (valuta_selection.options[i].value == 'all')
+                    break;
+            }
+        }
+        return selected_valutas;
+    }
+
+    /**
+     * Функция выводит на экран таблицу с курсом валют.
+     * @param exchanges: список объектов с кодами, названиями, курсами и датами.
+     */
+    function show_exchanges(exchanges) {
+        read_cookie();
+        // Очищаем блок для вывода курсов
+        let result_block = document.getElementById('result');
+        result_block.innerHTML = '';
+        if (exchanges.length == 0) {
+            // Список пустой
+            return;
+        }
+        // Список непустой. Создаем таблицу
+        let tbl = document.createElement('table');
+        tbl.className = 'table';
+        // Создаем заголовок
+        let html_code = '<thead class="thead-dark">\
+                <tr>\
+                    <th scope="col">#</th>\
+                    <th scope="col"><button type="button" class="btn btn-success" onclick="sort(this)">Валюта</button></th>\
+                    <th scope="col"><button type="button" class="btn btn-danger" onclick="sort(this)">Курс</button></th>\
+                    <th scope="col"><button type="button" class="btn btn-warning" onclick="sort(this)">Дата</button></th>\
+                </tr>\
+            </thead>';
+        // Создаем тело таблицы
+        let tbody = document.createElement('tbody');
+        tbl.insertAdjacentHTML("beforeend", html_code);
+        for (let i = 0; i < exchanges.length; i++) {
+            let date = new Date(exchanges[i][2]);
+            html_code = `<tr>\
+                <th scope="row">${i + 1}</th>\
+                <td>${exchanges[i][0]}</td>\
+                <td>${exchanges[i][1]}</td>\
+                <td>${date.toLocaleDateString()}</td>\
+                </tr>`;
+            tbody.insertAdjacentHTML("beforeend", html_code);
+        }
+        tbl.appendChild(tbody);
+        // Выводим таблицу
+        result_block.appendChild(tbl);
+    }
+
+    /**
+     * Функция выполняет запрос пользователя на сортировку данных.
+     * @param btn: кнопка, по которой кликнули.
+     */
+    async function sort(btn) {
+        // Читаем значения валют и дат, для которых построена таблица с курсами валют
+        let [valutas, period] = read_cookie();
+        // Отправляем запрос для получения курсов валют
+        let data = { data: valutas, period: period, sort_by: btn.innerText };
+        let response = await fetch("{{ url_for('get_exchanges') }}",
+            {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+        let result = await response.json();
+        if (response.status != 200) {
+            // Ошибка при обработке запроса
+            return;
+        }
+        // Очищаем блок для вывода курсов
+        let result_block = document.getElementById('result');
+        result_block.innerHTML = '';
+        // Запрос обработан и получен ответ
+        show_exchanges(result.exchanges);
+    }
+
+    /**
+     * Функция читает данные из куки.
+     * @returns: значения валют и дат, сохраненные в куки.
+     */
+    function read_cookie() {
+        let cookies = document.cookie.split(";");
+        let valutas, period;
+        for (let i = 0; i < cookies.length; i++) {
+            let parts = cookies[i].split("=");
+            if (parts[0].replace(' ', '') == 'valutas')
+                valutas = parts[1].split(',');
+            else if (parts[0].replace(' ', '') == 'period')
+                period = parts[1].split(',');
+        }
+        return [valutas, period];
+    }
+
+    /**
+     * Функция записывает данные в куки.
+     * @param data: объект (массив или дата), который нужно записать.
+     */
+    function write_cookie(data, name) {
+        let expire = new Date();
+        expire.setHours(expire.getHours() + 24);
+        document.cookie = `${name}=${data.toString()};expires=${expire}`;
+    }
+
+    // Для кнопки Получить курсы задаем функцию
+    var exchanges_btn = document.getElementById('exchanges_btn');
+    exchanges_btn.addEventListener('click', get_exchanges);
+</script>
+{% endblock %}
