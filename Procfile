@@ -1,1 +1,1 @@
-web: gubicorn app: runner
+web: gunicorn app: runner
